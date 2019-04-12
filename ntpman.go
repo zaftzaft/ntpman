@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"gopkg.in/alecthomas/kingpin.v2"
 	"net"
 	"os"
 	"strings"
@@ -11,19 +12,29 @@ import (
 
 const JAN_1970 = 2208988800
 
+var (
+	configfile = kingpin.Arg("configfile", "config file path").Required().String()
+	port       = kingpin.Flag("port", "source port").Short('p').String()
+)
+
 type Ntpman struct {
 	ConfAddr string
 	UDPAddr  *net.UDPAddr
 }
 
 func Run() int {
-	addrList, err := LoadConf("ntpman.conf")
+	addrList, err := LoadConf(*configfile)
 	if err != nil {
 		fmt.Println(err)
 		return 1
 	}
 
-	laddr, err := net.ResolveUDPAddr("udp", ":123")
+	laddrStr := ":"
+	if 0 < len(*port) {
+		laddrStr = laddrStr + *port
+	}
+
+	laddr, err := net.ResolveUDPAddr("udp", laddrStr)
 	if err != nil {
 		fmt.Println(err)
 		return 1
@@ -135,5 +146,7 @@ func LoadConf(filename string) ([]*Ntpman, error) {
 }
 
 func main() {
+	kingpin.Version("0.0.1")
+	kingpin.Parse()
 	os.Exit(Run())
 }
