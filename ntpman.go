@@ -11,6 +11,11 @@ import (
 
 const JAN_1970 = 2208988800
 
+type Ntpman struct {
+	ConfAddr string
+	UDPAddr  *net.UDPAddr
+}
+
 func Run() int {
 	addrList, err := LoadConf("ntpman.conf")
 	if err != nil {
@@ -31,15 +36,15 @@ func Run() int {
 	}
 	defer conn.Close()
 
-	for _, raddr := range addrList {
-		SendQuery(conn, raddr)
+	for _, ntpman := range addrList {
+		SendQuery(conn, ntpman)
 		time.Sleep(1 * time.Second)
 	}
 
 	return 0
 }
 
-func SendQuery(conn *net.UDPConn, raddr *net.UDPAddr) error {
+func SendQuery(conn *net.UDPConn, ntpman *Ntpman) error {
 	now := time.Now()
 	sec := now.Unix()
 	nsec := now.UnixNano() - (sec * 1000000000)
@@ -71,7 +76,7 @@ func SendQuery(conn *net.UDPConn, raddr *net.UDPAddr) error {
 		return err
 	}
 
-	n, err := conn.WriteToUDP(msg, raddr)
+	n, err := conn.WriteToUDP(msg, ntpman.UDPAddr)
 	if err != nil {
 		return err
 	}
@@ -88,14 +93,20 @@ func SendQuery(conn *net.UDPConn, raddr *net.UDPAddr) error {
 		return err
 	}
 
-	fmt.Printf("[%s] ver:%d stratum:%d\n",
-		uaddr, nh.Version, nh.Stratum)
+	domain, err := net.LookupAddr(uaddr.IP.String())
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("[%s] %s(%s) ver:%d stratum:%d\n",
+		ntpman.ConfAddr,
+		uaddr, domain, nh.Version, nh.Stratum)
 
 	return nil
 }
 
-func LoadConf(filename string) ([]*net.UDPAddr, error) {
-	list := make([]*net.UDPAddr, 0)
+func LoadConf(filename string) ([]*Ntpman, error) {
+	list := make([]*Ntpman, 0)
 
 	fp, err := os.Open(filename)
 	if err != nil {
@@ -110,12 +121,14 @@ func LoadConf(filename string) ([]*net.UDPAddr, error) {
 			continue
 		}
 
-		uaddr, err := net.ResolveUDPAddr("udp", line)
+		ntpman := &Ntpman{ConfAddr: line}
+
+		ntpman.UDPAddr, err = net.ResolveUDPAddr("udp", line)
 		if err != nil {
 			return nil, err
 		}
 
-		list = append(list, uaddr)
+		list = append(list, ntpman)
 	}
 
 	return list, nil
