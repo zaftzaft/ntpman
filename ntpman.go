@@ -20,6 +20,9 @@ var (
 type Ntpman struct {
 	ConfAddr string
 	UDPAddr  *net.UDPAddr
+
+	SendTime time.Time
+	RecvTime time.Time
 }
 
 func Run() int {
@@ -61,6 +64,8 @@ func SendQuery(conn *net.UDPConn, ntpman *Ntpman) error {
 	nsec := now.UnixNano() - (sec * 1000000000)
 	fraction := (float64(nsec) / 1000000000) * 4294967296
 
+	ntpman.SendTime = now
+
 	xmt := uint64(
 		(uint64(sec+JAN_1970) << 32) | uint64(fraction))
 
@@ -97,6 +102,7 @@ func SendQuery(conn *net.UDPConn, ntpman *Ntpman) error {
 	if err != nil {
 		return err
 	}
+	ntpman.RecvTime = time.Now()
 
 	var nh NtpHeader
 	err = (&nh).Unmarshal(buf[:n])
@@ -109,9 +115,9 @@ func SendQuery(conn *net.UDPConn, ntpman *Ntpman) error {
 		return err
 	}
 
-	fmt.Printf("[%s] %s(%s) ver:%d stratum:%d\n",
+	fmt.Printf("[%s] %s(%s) ver:%d stratum:%d RTT:%v\n",
 		ntpman.ConfAddr,
-		uaddr, domain, nh.Version, nh.Stratum)
+		uaddr, domain, nh.Version, nh.Stratum, ntpman.RecvTime.Sub(ntpman.SendTime))
 
 	return nil
 }
