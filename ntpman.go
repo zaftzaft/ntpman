@@ -117,7 +117,8 @@ func SendQuery(conn *net.UDPConn, ntpman *Ntpman) error {
 
 	fmt.Printf("[%s] %s(%s) ver:%d stratum:%d RTT:%v\n",
 		ntpman.ConfAddr,
-		uaddr, domain, nh.Version, nh.Stratum, ntpman.RecvTime.Sub(ntpman.SendTime))
+		uaddr, domain, nh.Version, nh.Stratum, 
+		ntpman.RecvTime.Sub(ntpman.SendTime).Truncate(time.Microsecond * 10))
 
 	return nil
 }
