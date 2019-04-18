@@ -91,3 +91,16 @@ func (n *NtpHeader) Unmarshal(b []byte) error {
 
 	return nil
 }
+
+func (n *NtpHeader) RefidStr() string {
+	s := ""
+
+	if n.Stratum == 1 {
+		s += string((n.Refid >> 24) & 0xff)
+		s += string((n.Refid >> 16) & 0xff)
+		s += string((n.Refid >> 8) & 0xff)
+		s += string(n.Refid & 0xff)
+	}
+
+	return s
+}
