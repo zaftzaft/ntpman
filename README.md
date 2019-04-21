@@ -2,7 +2,7 @@ ntpman
 ======
 NTP(Network Time Protocol) Measurement Tool
 
-
+[![asciicast](https://asciinema.org/a/ZkV6sBi8e9Eo1Vuj0BNFZsFld.svg)](https://asciinema.org/a/ZkV6sBi8e9Eo1Vuj0BNFZsFld)
 
 # Usage
 ```
