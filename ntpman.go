@@ -3,12 +3,17 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/gdamore/tcell"
+	"github.com/rivo/tview"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
+
+const Version = "0.0.2"
 
 const JAN_1970 = 2208988800
 
@@ -20,6 +25,9 @@ var (
 type Ntpman struct {
 	ConfAddr string
 	UDPAddr  *net.UDPAddr
+
+	ServerAddr *net.UDPAddr
+	Domains    []string
 
 	SendTime time.Time
 	RecvTime time.Time
@@ -50,18 +58,67 @@ func Run() int {
 	}
 	defer conn.Close()
 
-	for _, ntpman := range addrList {
-		err = SendQuery(conn, ntpman)
-		if err != nil {
-			fmt.Println(err)
+	app := tview.NewApplication()
+	header := tview.NewTable()
+	table := tview.NewTable()
+	grid := tview.NewGrid().
+		SetRows(1, 0).
+		AddItem(header, 0, 0, 1, 3, 0, 0, false).
+		AddItem(table, 1, 0, 1, 3, 0, 0, true)
+	defer app.Stop()
+
+	header.SetCell(0, 0, tview.NewTableCell("ntpman"))
+	header.SetCell(0, 1, tview.NewTableCell(Version))
+	header.SetCell(0, 2, tview.NewTableCell(conn.LocalAddr().String()))
+
+	go func() {
+		for c, hdr := range []string{"Conf", "Server", "Domain", "Ref", "RTT", "S", "V"} {
+			table.SetCell(0, c, tview.NewTableCell(hdr))
 		}
-		time.Sleep(1 * time.Second)
+
+		for {
+			for i, ntpman := range addrList {
+				table.SetCell(i+1, 0, tview.NewTableCell(ntpman.ConfAddr))
+
+				nh, err := SendQuery(conn, ntpman)
+				if err != nil {
+					table.SetCell(i+1, 1, tview.NewTableCell(err.Error()).SetTextColor(tcell.ColorRed))
+					app.Draw()
+					continue
+				}
+
+				table.SetCell(i+1, 1, tview.NewTableCell(ntpman.ServerAddr.String()))
+
+				if len(ntpman.Domains) > 0 {
+					table.SetCell(i+1, 2, tview.NewTableCell(ntpman.Domains[0]))
+				}
+
+				table.SetCell(i+1, 3, tview.NewTableCell(nh.RefidStr()))
+
+				table.SetCell(i+1, 4, tview.NewTableCell(
+					ntpman.RecvTime.
+						Sub(ntpman.SendTime).
+						Truncate(time.Microsecond*10).
+						String()))
+
+				table.SetCell(i+1, 5, tview.NewTableCell(strconv.Itoa(int(nh.Stratum))))
+				table.SetCell(i+1, 6, tview.NewTableCell(strconv.Itoa(int(nh.Version))))
+				app.Draw()
+
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}()
+
+	if err = app.SetRoot(grid, true).Run(); err != nil {
+		fmt.Println(err)
+		return 1
 	}
 
 	return 0
 }
 
-func SendQuery(conn *net.UDPConn, ntpman *Ntpman) error {
+func SendQuery(conn *net.UDPConn, ntpman *Ntpman) (*NtpHeader, error) {
 	now := time.Now()
 	sec := now.Unix()
 	nsec := now.UnixNano() - (sec * 1000000000)
@@ -92,39 +149,34 @@ func SendQuery(conn *net.UDPConn, ntpman *Ntpman) error {
 
 	err := conn.SetDeadline(now.Add(time.Second))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	n, err := conn.WriteToUDP(msg, ntpman.UDPAddr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	buf := make([]byte, 9000)
 	n, uaddr, err := conn.ReadFromUDP(buf)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	ntpman.ServerAddr = uaddr
 	ntpman.RecvTime = time.Now()
 
 	var nh NtpHeader
-	err = (&nh).Unmarshal(buf[:n])
+	err = nh.Unmarshal(buf[:n])
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	domain, err := net.LookupAddr(uaddr.IP.String())
+	ntpman.Domains, err = net.LookupAddr(uaddr.IP.String())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	fmt.Printf("[%s] %s(%s)%s ver:%d stratum:%d RTT:%v\n",
-		ntpman.ConfAddr,
-		uaddr, domain, nh.RefidStr(),
-		nh.Version, nh.Stratum,
-		ntpman.RecvTime.Sub(ntpman.SendTime).Truncate(time.Microsecond*10))
-
-	return nil
+	return &nh, nil
 }
 
 func LoadConf(filename string) ([]*Ntpman, error) {
@@ -157,7 +209,7 @@ func LoadConf(filename string) ([]*Ntpman, error) {
 }
 
 func main() {
-	kingpin.Version("0.0.1")
+	kingpin.Version(Version)
 	kingpin.Parse()
 	os.Exit(Run())
 }

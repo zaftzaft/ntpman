@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"net"
 )
 
 type NtpLeap uint8
@@ -100,6 +101,13 @@ func (n *NtpHeader) RefidStr() string {
 		s += string((n.Refid >> 16) & 0xff)
 		s += string((n.Refid >> 8) & 0xff)
 		s += string(n.Refid & 0xff)
+	} else if n.Stratum > 1 {
+		return net.IPv4(
+			byte((n.Refid>>24)&0xff),
+			byte((n.Refid>>16)&0xff),
+			byte((n.Refid>>8)&0xff),
+			byte(n.Refid&0xff),
+		).String()
 	}
 
 	return s
