@@ -51,7 +51,10 @@ func Run() int {
 	defer conn.Close()
 
 	for _, ntpman := range addrList {
-		SendQuery(conn, ntpman)
+		err = SendQuery(conn, ntpman)
+		if err != nil {
+			fmt.Println(err)
+		}
 		time.Sleep(1 * time.Second)
 	}
 
