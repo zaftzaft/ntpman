@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const Version = "0.0.2"
+const Version = "0.0.3"
 
 const JAN_1970 = 2208988800
 
@@ -72,40 +72,40 @@ func Run() int {
 	header.SetCell(0, 2, tview.NewTableCell(conn.LocalAddr().String()))
 
 	go func() {
-		for c, hdr := range []string{"Conf", "Server", "Domain", "Ref", "RTT", "S", "V"} {
+		for c, hdr := range []string{" ", "Conf", "Server", "Domain", "Ref", "RTT", "S", "V"} {
 			table.SetCell(0, c, tview.NewTableCell(hdr))
 		}
 
 		for {
 			for i, ntpman := range addrList {
-				table.SetCell(i+1, 0, tview.NewTableCell(ntpman.ConfAddr))
+				table.SetCell(i+1, 0, tview.NewTableCell(">"))
+				table.SetCell(i+1, 1, tview.NewTableCell(ntpman.ConfAddr))
 
 				nh, err := SendQuery(conn, ntpman)
 				if err != nil {
-					table.SetCell(i+1, 1, tview.NewTableCell(err.Error()).SetTextColor(tcell.ColorRed))
-					app.Draw()
-					continue
+					table.SetCell(i+1, 2, tview.NewTableCell(err.Error()).SetTextColor(tcell.ColorRed))
+				} else {
+					table.SetCell(i+1, 2, tview.NewTableCell(ntpman.ServerAddr.String()))
+
+					if len(ntpman.Domains) > 0 {
+						table.SetCell(i+1, 3, tview.NewTableCell(ntpman.Domains[0]))
+					}
+
+					table.SetCell(i+1, 4, tview.NewTableCell(nh.RefidStr()))
+
+					table.SetCell(i+1, 5, tview.NewTableCell(
+						ntpman.RecvTime.
+							Sub(ntpman.SendTime).
+							Truncate(time.Microsecond*10).
+							String()))
+
+					table.SetCell(i+1, 6, tview.NewTableCell(strconv.Itoa(int(nh.Stratum))))
+					table.SetCell(i+1, 7, tview.NewTableCell(strconv.Itoa(int(nh.Version))))
 				}
 
-				table.SetCell(i+1, 1, tview.NewTableCell(ntpman.ServerAddr.String()))
-
-				if len(ntpman.Domains) > 0 {
-					table.SetCell(i+1, 2, tview.NewTableCell(ntpman.Domains[0]))
-				}
-
-				table.SetCell(i+1, 3, tview.NewTableCell(nh.RefidStr()))
-
-				table.SetCell(i+1, 4, tview.NewTableCell(
-					ntpman.RecvTime.
-						Sub(ntpman.SendTime).
-						Truncate(time.Microsecond*10).
-						String()))
-
-				table.SetCell(i+1, 5, tview.NewTableCell(strconv.Itoa(int(nh.Stratum))))
-				table.SetCell(i+1, 6, tview.NewTableCell(strconv.Itoa(int(nh.Version))))
 				app.Draw()
-
 				time.Sleep(1 * time.Second)
+				table.SetCell(i+1, 0, tview.NewTableCell(" "))
 			}
 		}
 	}()
@@ -171,10 +171,7 @@ func SendQuery(conn *net.UDPConn, ntpman *Ntpman) (*NtpHeader, error) {
 		return nil, err
 	}
 
-	ntpman.Domains, err = net.LookupAddr(uaddr.IP.String())
-	if err != nil {
-		return nil, err
-	}
+	ntpman.Domains, _ = net.LookupAddr(uaddr.IP.String())
 
 	return &nh, nil
 }
@@ -192,6 +189,10 @@ func LoadConf(filename string) ([]*Ntpman, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		if len(line) < 1 {
 			continue
 		}
 
